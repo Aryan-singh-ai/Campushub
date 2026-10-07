@@ -56,9 +56,64 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string) => {
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 700));
+
+    // Try live Java Spring Boot auth API first
+    try {
+      const res = await fetch("http://localhost:8080/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.token) {
+          localStorage.setItem("campushub_auth_token", data.token);
+          let mappedRole: UserRole = "STUDENT";
+          const r = (data.role || "").toUpperCase();
+          if (r.includes("ADMIN")) mappedRole = "ADMIN";
+          else if (r.includes("FACULTY")) mappedRole = "FACULTY";
+          else if (r.includes("OFFICER") || r.includes("PRESIDENT")) mappedRole = "PRESIDENT";
+          else if (r.includes("EVENT_HEAD") || r.includes("EVENTHEAD")) mappedRole = "EVENT_HEAD";
+
+          const authUser: AuthUser = {
+            id: String(data.id || "usr-001"),
+            name: data.name || "University User",
+            email: data.email,
+            role: mappedRole,
+          };
+          setUser(authUser);
+          localStorage.setItem("campushub_user", JSON.stringify(authUser));
+          setLoading(false);
+          router.push(ROLE_REDIRECTS[authUser.role]);
+          return;
+        }
+      }
+    } catch (e) {
+      // Backend offline – fall through to mock demo login
+    }
+
+    // Fallback Mock authentication for standalone demo
+    await new Promise((r) => setTimeout(r, 400));
     const account = MOCK_ACCOUNTS[email.toLowerCase()];
-    if (!account) { setLoading(false); throw new Error("No account found with this email address."); }
+    if (!account) { 
+      // If valid custom university email, create student session
+      if (email.endsWith("@university.edu") && password.length >= 6) {
+        const customUser: AuthUser = {
+          id: `usr-${Math.random().toString(36).substr(2, 5)}`,
+          name: email.split("@")[0].replace(".", " ").toUpperCase(),
+          email,
+          role: "STUDENT",
+        };
+        setUser(customUser);
+        localStorage.setItem("campushub_user", JSON.stringify(customUser));
+        setLoading(false);
+        router.push(ROLE_REDIRECTS.STUDENT);
+        return;
+      }
+      setLoading(false); 
+      throw new Error("No account found with this email address."); 
+    }
     if (password.length < 6) { setLoading(false); throw new Error("Password must be at least 6 characters."); }
     setUser(account);
     localStorage.setItem("campushub_user", JSON.stringify(account));
@@ -69,6 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     setUser(null);
     localStorage.removeItem("campushub_user");
+    localStorage.removeItem("campushub_auth_token");
   };
 
   return (

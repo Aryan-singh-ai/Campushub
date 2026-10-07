@@ -455,9 +455,47 @@ const MOCK_PROPOSALS = [
   },
 ];
 
+const JAVA_API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
+
 export async function apiFetch(path: string, options?: RequestInit): Promise<any> {
-  // Simulate network delay
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  // Attempt live Java Spring Boot API call
+  try {
+    const cleanPath = path.startsWith("/") ? path : `/${path}`;
+    const url = `${JAVA_API_BASE}${cleanPath}`;
+    
+    // Add Authorization header if token exists in localStorage
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...(options?.headers as Record<string, string> || {}),
+    };
+
+    if (typeof window !== "undefined") {
+      const token = localStorage.getItem("campushub_auth_token");
+      if (token && !headers["Authorization"]) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+    const res = await fetch(url, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const data = await res.json();
+      return data;
+    }
+  } catch (err) {
+    // Java backend offline or request timed out – seamlessly fallback to mock demo handler
+  }
+
+  // Fallback / Mock Handler for offline demo
+  await new Promise((resolve) => setTimeout(resolve, 200));
 
   if (!options?.method || options.method === "GET") {
     if (path.match(/^\/events\/([^/]+)$/)) {
@@ -571,3 +609,4 @@ export async function apiFetch(path: string, options?: RequestInit): Promise<any
 
   return { success: true };
 }
+

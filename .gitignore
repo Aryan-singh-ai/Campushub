@@ -12,6 +12,22 @@ out/
 .vercel/
 **/.vercel/
 
+# Java & Maven build output
+target/
+**/target/
+*.class
+*.jar
+*.war
+*.ear
+
+# IDE & Editor files
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+.vscode/
+
 # Environment & local secret files
 .env
 .env*.local
